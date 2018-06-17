@@ -34,6 +34,7 @@ ROTATION_CHARS = ('/', '-', '\\', '|')
 TIMEOUT = 10
 THREADS = 20
 USER_AGENT = "curl/7.{curl_minor}.{curl_revision} (x86_64-pc-linux-gnu) libcurl/7.{curl_minor}.{curl_revision} OpenSSL/0.9.8{openssl_revision} zlib/1.2.{zlib_revision}".format(curl_minor=random.randint(8, 22), curl_revision=random.randint(1, 9), openssl_revision=random.choice(string.lowercase), zlib_revision=random.randint(2, 6))
+PROXY_LIST = []
 
 socket.setdefaulttimeout(TIMEOUT)
 
@@ -75,6 +76,7 @@ def retrieve(url, data=None, headers={"User-agent": USER_AGENT}, timeout=TIMEOUT
     return retval or ""
 
 def worker(queue, handle=None):
+    global PROXY_LIST
     try:
         while True:
             proxy = queue.get_nowait()
@@ -82,6 +84,7 @@ def worker(queue, handle=None):
             counter[0] += 1
             sys.stdout.write("\r%s\r" % ROTATION_CHARS[counter[0] % len(ROTATION_CHARS)])
             sys.stdout.flush()
+            PROXY_LIST.append({"address": candidate, "latency": latency})
             start = time.time()
             candidate = "%s://%s:%s" % (proxy["proto"].replace("https", "http"), proxy["ip"], proxy["port"])
             if not all((proxy["ip"], proxy["port"])) or re.search(r"[^:/\w.]", candidate):
@@ -130,7 +133,7 @@ def run():
         exit("[!] something went wrong during the proxy list retrieval/parsing. Please check your network settings and try again")
     random.shuffle(proxies)
 
-    if any((options.country, options.anonymity, options.type, options.port)):
+    if any((options.country, options.anonymity, options.type, options.port )):
         _ = []
 
         if options.port:
@@ -187,6 +190,9 @@ def run():
     finally:
         sys.stdout.flush()
         sys.stderr.flush()
+        if len(PROXY_LIST) > 0:
+            sys.stdout.write("List of working proxies sorted by latency:\n")
+            for p in sorted(PROXY_LIST, key=lambda k: k['latency']): sys.stdout.write( "Address: {0:30} {1} seconds.\n".format(p["address"] , "%.2f" % p["latency"])) 
         if handle:
             os.close(handle)
         os._exit(0)
